@@ -1,0 +1,90 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.IO;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using ProjectEstimator.Models;
+using ProjectEstimator.Services.Interfaces;
+
+namespace ProjectEstimator.Services
+{
+    public class LearningService : ILearningService
+    {
+        private readonly string _modelPath = "learning_model.json";
+        private readonly ILogger<LearningService> _logger;
+        private LearningModel _currentModel;
+
+        public LearningService(ILogger<LearningService> logger)
+        {
+            _logger = logger;
+            InitializeModel();
+        }
+
+        private void InitializeModel()
+        {
+            if (File.Exists(_modelPath))
+            {
+                var json = File.ReadAllText(_modelPath);
+                _currentModel = JsonSerializer.Deserialize<LearningModel>(json) ?? CreateDefaultModel();
+            }
+            else
+            {
+                _currentModel = CreateDefaultModel();
+            }
+        }
+
+        private LearningModel CreateDefaultModel()
+        {
+            var model = new LearningModel
+            {
+                GlobalAdjustmentFactor = 1.0,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            foreach (TaskCategory category in Enum.GetValues(typeof(TaskCategory)))
+            {
+                model.CategoryAdjustmentFactors[category] = 1.0;
+            }
+
+            foreach (ComplexityLevel complexity in Enum.GetValues(typeof(ComplexityLevel)))
+            {
+                model.ComplexityMultipliers[complexity] = 1.0;
+            }
+
+            return model;
+        }
+
+        public async Task<LearningModel> GetCurrentModelAsync()
+        {
+            return await Task.FromResult(_currentModel);
+        }
+
+        public async Task ProcessFeedbackAsync(EstimationFeedback feedback)
+        {
+            var accuracyRatio = feedback.EstimatedHours / feedback.ActualHours;
+            var alpha = 0.2;
+            
+            _currentModel.GlobalAdjustmentFactor = 
+                alpha * accuracyRatio + (1 - alpha) * _currentModel.GlobalAdjustmentFactor;
+
+            _currentModel.TotalEstimations++;
+            _currentModel.AverageAccuracy = 
+                (_currentModel.AverageAccuracy * (_currentModel.TotalEstimations - 1) + feedback.AccuracyPercentage) 
+                / _currentModel.TotalEstimations;
+            
+            _currentModel.LastUpdated = DateTime.UtcNow;
+
+            await SaveModelAsync(_currentModel);
+            
+            _logger.LogInformation("Learning model updated. Global factor: {_currentModel.GlobalAdjustmentFactor:F3}, Accuracy: {_currentModel.AverageAccuracy:F2}%");
+        }
+
+        public async Task SaveModelAsync(LearningModel model)
+        {
+            var json = JsonSerializer.Serialize(model, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(_modelPath, json);
+        }
+    }
+}

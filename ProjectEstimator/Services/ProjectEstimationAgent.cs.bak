@@ -1,0 +1,156 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using ProjectEstimator.Models;
+using ProjectEstimator.Services.Interfaces;
+
+namespace ProjectEstimator.Services
+{
+    public class ProjectEstimationAgent : IProjectEstimationAgent
+    {
+        private readonly IOpenAIService _openAIService;
+        private readonly IPdfReaderService _pdfReader;
+        private readonly ILearningService _learningService;
+        private readonly ILogger<ProjectEstimationAgent> _logger;
+
+        public ProjectEstimationAgent(
+            IOpenAIService openAIService,
+            IPdfReaderService pdfReader,
+            ILearningService learningService,
+            ILogger<ProjectEstimationAgent> logger)
+        {
+            _openAIService = openAIService;
+            _pdfReader = pdfReader;
+            _learningService = learningService;
+            _logger = logger;
+        }
+
+        public async Task<ProjectEstimation> AnalyzeProjectAsync(string pdfPath, string initialPrompt)
+        {
+            var estimation = new ProjectEstimation
+            {
+                DocumentPath = pdfPath,
+                InitialPrompt = initialPrompt,
+                Status = EstimationStatus.Processing
+            };
+
+            try
+            {
+                var documentContent = await _pdfReader.ReadPdfAsync(pdfPath);
+                var tasks = await ExtractTasksFromDocumentAsync(documentContent, initialPrompt);
+                var learningModel = await _learningService.GetCurrentModelAsync();
+                
+                foreach (var task in tasks)
+                {
+                    task.EstimatedHours = await EstimateTaskHoursAsync(task);
+                    
+                    if (learningModel.CategoryAdjustmentFactors.ContainsKey(task.Category))
+                    {
+                        task.EstimatedHours *= learningModel.CategoryAdjustmentFactors[task.Category];
+                    }
+                    
+                    if (learningModel.ComplexityMultipliers.ContainsKey(task.Complexity))
+                    {
+                        task.EstimatedHours *= learningModel.ComplexityMultipliers[task.Complexity];
+                    }
+                }
+                
+                estimation.Tasks = tasks;
+                estimation.TotalEstimatedHours = tasks.Sum(t => t.EstimatedHours);
+                estimation.Status = EstimationStatus.Completed;
+                estimation.ProjectName = ExtractProjectName(documentContent);
+                
+                _logger.LogInformation("Estimation completed: {tasks.Count} tasks, {estimation.TotalEstimatedHours:F2} total hours");
+            }
+            catch (Exception ex)
+            {
+                estimation.Status = EstimationStatus.Failed;
+                estimation.AnalysisResult = "Error: {ex.Message}";
+                _logger.LogError(ex, "Error during project analysis");
+            }
+
+            return estimation;
+        }
+
+        public async Task<List<DevelopmentTask>> ExtractTasksFromDocumentAsync(string documentContent, string prompt)
+        {
+            var systemPrompt = @"
+                Eres un experto en estimación de proyectos de desarrollo de software.
+                Analiza el documento proporcionado y extrae todas las tareas de desarrollo necesarias.
+                Para cada tarea, determina:
+                1. Nombre descriptivo
+                2. Descripción detallada
+                3. Categoría (Backend, Frontend, Database, etc.)
+                4. Nivel de complejidad (Simple, Medium, Complex, VeryComplex)
+                5. Dependencias con otras tareas
+                6. Habilidades técnicas requeridas
+                
+                Devuelve la respuesta en formato JSON como un array de objetos con estas propiedades.
+                Sé específico y detallado en la descomposición de tareas.
+            ";
+
+            var userPrompt = "Contexto adicional del usuario: {prompt}\n\nDocumento a analizar:\n{documentContent}\n\nPor favor, extrae todas las tareas de desarrollo necesarias.";
+
+            var response = await _openAIService.GetCompletionAsync(systemPrompt, userPrompt);
+            
+            try
+            {
+                var tasks = JsonSerializer.Deserialize<List<DevelopmentTask>>(response);
+                return tasks ?? new List<DevelopmentTask>();
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Error parsing AI response");
+                return new List<DevelopmentTask>();
+            }
+        }
+
+        public async Task<double> EstimateTaskHoursAsync(DevelopmentTask task)
+        {
+            var baseHours = task.Complexity switch
+            {
+                ComplexityLevel.Simple => 4,
+                ComplexityLevel.Medium => 16,
+                ComplexityLevel.Complex => 40,
+                ComplexityLevel.VeryComplex => 80,
+                _ => 8
+            };
+
+            var categoryMultiplier = task.Category switch
+            {
+                TaskCategory.Backend => 1.0,
+                TaskCategory.Frontend => 0.9,
+                TaskCategory.Database => 1.1,
+                TaskCategory.Infrastructure => 1.3,
+                TaskCategory.Testing => 0.7,
+                TaskCategory.Documentation => 0.5,
+                TaskCategory.DevOps => 1.2,
+                TaskCategory.Architecture => 1.4,
+                _ => 1.0
+            };
+
+            var dependencyMultiplier = 1.0 + (task.Dependencies.Count * 0.1);
+
+            return await Task.FromResult(baseHours * categoryMultiplier * dependencyMultiplier);
+        }
+
+        public async Task UpdateLearningModelAsync(EstimationFeedback feedback)
+        {
+            await _learningService.ProcessFeedbackAsync(feedback);
+        }
+
+        public async Task<LearningModel> GetCurrentLearningModelAsync()
+        {
+            return await _learningService.GetCurrentModelAsync();
+        }
+
+        private string ExtractProjectName(string documentContent)
+        {
+            var lines = documentContent.Split('\n');
+            return lines.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l))?.Trim() ?? "Proyecto Sin Nombre";
+        }
+    }
+}

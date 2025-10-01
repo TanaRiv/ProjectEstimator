@@ -1,0 +1,32 @@
+using System.Threading.Tasks;
+using System.IO;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
+using ProjectEstimator.Services.Interfaces;
+
+namespace ProjectEstimator.Services
+{
+    public class PdfReaderService : IPdfReaderService
+    {
+        public async Task<string> ReadPdfAsync(string filePath)
+        {
+            return await Task.Run(() =>
+            {
+                using var pdfReader = new PdfReader(filePath);
+                using var pdfDoc = new PdfDocument(pdfReader);
+                
+                var strategy = new SimpleTextExtractionStrategy();
+                var text = string.Empty;
+                
+                for (int i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
+                {
+                    var page = pdfDoc.GetPage(i);
+                    text += PdfTextExtractor.GetTextFromPage(page, strategy);
+                }
+                
+                return text;
+            });
+        }
+    }
+}
