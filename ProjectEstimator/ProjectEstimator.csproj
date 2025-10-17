@@ -1,21 +1,44 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>ProjectEstimatorApp</RootNamespace>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<RootNamespace>ProjectEstimatorApp</RootNamespace>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="itext7.bouncy-castle-adapter" Version="8.0.2" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.0" PrivateAssets="all" />
-    <PackageReference Include="itext7" Version="8.0.2" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
-  </ItemGroup>
+	<!-- DEBUG: genera PDB y desactiva optimizaciones y linking -->
+	<PropertyGroup Condition="'$(Configuration)'=='Debug'">
+		<DebugType>portable</DebugType>
+		<Optimize>false</Optimize>
+		<BlazorWebAssemblyEnableLinking>false</BlazorWebAssemblyEnableLinking>
+		<!-- Por si acaso: -->
+		<RunAOTCompilation>false</RunAOTCompilation>
+	</PropertyGroup>
+
+	<!-- RELEASE: linker encendido y optimización -->
+	<PropertyGroup Condition="'$(Configuration)'=='Release'">
+		<Optimize>true</Optimize>
+		<BlazorWebAssemblyEnableLinking>true</BlazorWebAssemblyEnableLinking>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Compile Remove="Data\EstimatorDbContext.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="Data\EstimatorDbContext.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="itext7.bouncy-castle-adapter" Version="8.0.2" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.0" PrivateAssets="all" />
+		<PackageReference Include="itext7" Version="8.0.2" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
+	</ItemGroup>
 
 </Project>

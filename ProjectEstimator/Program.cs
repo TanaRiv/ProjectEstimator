@@ -12,11 +12,11 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 // Configurar logging
 builder.Logging.SetMinimumLevel(LogLevel.Debug);
 
-// Configurar HttpClient para OpenAI
+// Configurar HttpClient para OpenAI con timeout extendido para GPT-5
 builder.Services.AddScoped(sp => {
     var client = new HttpClient();
     client.BaseAddress = new Uri("https://api.openai.com/");
-    client.Timeout = TimeSpan.FromSeconds(60); // Timeout de 60 segundos para OpenAI
+    client.Timeout = TimeSpan.FromSeconds(180); // GPT-5 con reasoning puede tardar más
     return client;
 });
 

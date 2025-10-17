@@ -31,3 +31,9 @@ bld/
 learning_model.json
 *.pdf
 temp/
+ProjectEstimator/wwwroot/appsettings.json
+ProjectEstimator/appsettings.Development.json
+/ProjectEstimator/appsettings.json
+/ProjectEstimator/wwwroot/appsettings.json
+/ProjectEstimator/wwwroot/appsettings.json
+/ProjectEstimator/appsettings.json
